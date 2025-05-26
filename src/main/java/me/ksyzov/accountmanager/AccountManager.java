@@ -1,10 +1,17 @@
-package me.ksyz.accountmanager;
-
+package me.ksyzov.accountmanager;
 
 import com.google.gson.*;
+<<<<<<< HEAD:src/main/java/me/ksyz/accountmanager/AccountManager.java
 import me.ksyz.accountmanager.auth.Account;
 import me.ksyz.accountmanager.utils.SSLUtil;
+=======
+import me.ksyzov.accountmanager.auth.Account;
+import me.ksyzov.accountmanager.auth.AccountType;
+import me.ksyzov.accountmanager.auth.CookieAuth;
+import me.ksyzov.accountmanager.gui.GuiCookieAuth;
+>>>>>>> pr-4:src/main/java/me/ksyzov/accountmanager/AccountManager.java
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiScreen;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.Mod.EventHandler;
@@ -43,19 +50,12 @@ public class AccountManager {
   public static void load() {
     accounts.clear();
     try {
-      JsonElement json = new JsonParser().parse(
-        new BufferedReader(new FileReader(file))
-      );
+      JsonElement json = new JsonParser().parse(new BufferedReader(new FileReader(file)));
       if (json instanceof JsonArray) {
         JsonArray jsonArray = json.getAsJsonArray();
         for (JsonElement jsonElement : jsonArray) {
           JsonObject jsonObject = jsonElement.getAsJsonObject();
-          accounts.add(new Account(
-            Optional.ofNullable(jsonObject.get("refreshToken")).map(JsonElement::getAsString).orElse(""),
-            Optional.ofNullable(jsonObject.get("accessToken")).map(JsonElement::getAsString).orElse(""),
-            Optional.ofNullable(jsonObject.get("username")).map(JsonElement::getAsString).orElse(""),
-            Optional.ofNullable(jsonObject.get("unban")).map(JsonElement::getAsLong).orElse(0L)
-          ));
+          accounts.add(Account.fromJson(jsonObject)); 
         }
       }
     } catch (FileNotFoundException e) {
@@ -67,12 +67,7 @@ public class AccountManager {
     try {
       JsonArray jsonArray = new JsonArray();
       for (Account account : accounts) {
-        JsonObject jsonObject = new JsonObject();
-        jsonObject.addProperty("refreshToken", account.getRefreshToken());
-        jsonObject.addProperty("accessToken", account.getAccessToken());
-        jsonObject.addProperty("username", account.getUsername());
-        jsonObject.addProperty("unban", account.getUnban());
-        jsonArray.add(jsonObject);
+        jsonArray.add(account.toJson()); 
       }
       PrintWriter printWriter = new PrintWriter(new FileWriter(file));
       printWriter.println(gson.toJson(jsonArray));
@@ -81,4 +76,35 @@ public class AccountManager {
       System.err.print("Couldn't save accounts.json!");
     }
   }
+
+  public static void addCrackedAccount(String username) {
+    Optional<Account> existingAccount = accounts.stream()
+            .filter(acc -> acc.getUsername().equalsIgnoreCase(username) && acc.getType() == AccountType.CRACKED)
+            .findFirst();
+
+    if (existingAccount.isPresent()) {
+      return;
+    }
+    accounts.add(new Account(
+            "",
+            "accessToken",
+            username,
+            0L,
+            AccountType.CRACKED
+    ));
+    save();
+    System.out.println("Cracked account " + username + " added successfully!");
+  }
+
+
+  public static void addAccountFromCookieFile(File cookieFile, GuiScreen previousScreen) {
+    GuiCookieAuth gui = new GuiCookieAuth(previousScreen);
+    CookieAuth.addAccountFromCookieFile(cookieFile, gui);
+  }
+
+  /**
+   * Adds a cracked account to the account manager.
+   *
+   * @param username The username of the cracked account.
+   */
 }
