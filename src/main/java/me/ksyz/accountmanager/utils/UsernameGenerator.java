@@ -1,106 +1,114 @@
-package me.ksyzov.accountmanager.utils;
+package me.ksyz.accountmanager.utils;
 
-import javax.net.ssl.HttpsURLConnection;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.URL;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.Random;
 
 public class UsernameGenerator {
-    private static final String URL = "https://raw.githubusercontent.com/jeanphorn/wordlist/master/usernames.txt";
+    private static final String LOCAL_FILE_PATH = "/usernames.txt";
+
+    private static final Random RANDOM = new Random();
 
     public static String[] retrieve() {
         try {
-            HttpsURLConnection connection = (HttpsURLConnection) new URL(URL).openConnection();
-            connection.addRequestProperty("User-Agent", "Mozilla/5.0");
+            InputStream stream = UsernameGenerator.class.getResourceAsStream(LOCAL_FILE_PATH);
 
-            int responseCode = connection.getResponseCode();
-            boolean isErrorStream = responseCode / 100 != 2 && responseCode / 100 != 3;
-            InputStream stream = isErrorStream ? connection.getErrorStream() : connection.getInputStream();
             if (stream == null) {
+                System.err.println("Error: Local username file not found! Please ensure " + LOCAL_FILE_PATH + " exists in the resources directory.");
                 return null;
             }
 
             BufferedReader reader = new BufferedReader(new InputStreamReader(stream));
             StringBuilder builder = new StringBuilder();
-            for (String s; (s = reader.readLine()) != null; builder.append(s).append(System.lineSeparator())) ;
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (!line.trim().isEmpty()) {
+                    builder.append(line.trim()).append(System.lineSeparator());
+                }
+            }
             reader.close();
 
+            if (builder.length() == 0) {
+                System.err.println("Error: Local username file " + LOCAL_FILE_PATH + " is empty or contains no valid content.");
+                return null;
+            }
+
             return builder.toString().split(System.lineSeparator());
+
         } catch (IOException ex) {
+            System.err.println("Error reading local username file: " + ex.getMessage());
             ex.printStackTrace();
         }
 
         return null;
     }
 
-    /**
-     * Generates exactly one username.
-     *
-     * @return The generated username.
-     */
     public static String generate() {
         String[] generated = generate(1);
-        return generated == null ? null : generated[0];
+        return (generated == null || generated.length == 0) ? null : generated[0];
     }
 
-    /**
-     * Generates a given amount of usernames.
-     *
-     * @param amount The amount of usernames to generate.
-     * @return The generated usernames.
-     */
     public static String[] generate(int amount) {
         String[] usernames = retrieve();
-        if (usernames == null) {
+        if (usernames == null || usernames.length == 0) {
             return null;
         }
 
-        String[] generated = new String[amount];
         List<String> acceptableUsernames = Arrays.stream(usernames)
                 .filter(username -> username.length() >= 3 && username.length() <= 6)
                 .collect(Collectors.toList());
 
+        if (acceptableUsernames.isEmpty()) {
+            System.err.println("Warning: No words matching the length criteria (3-6 characters) found in the local username file.");
+            return null;
+        }
+
+        String[] generated = new String[amount];
         for (int i = 0; i < amount; ++i) {
-            String prefix = acceptableUsernames.get((int) (Math.random() * acceptableUsernames.size()));
-            String suffix = acceptableUsernames.get((int) (Math.random() * acceptableUsernames.size()));
+            String prefix = acceptableUsernames.get(RANDOM.nextInt(acceptableUsernames.size()));
+            String suffix = acceptableUsernames.get(RANDOM.nextInt(acceptableUsernames.size()));
             String username = applyPattern(prefix, suffix);
-            generated[i] = applyPattern(username);
+            username = applyPattern(username);
+            if (username.length() > 16) {
+                username = username.substring(0, 16);
+            }
+            generated[i] = username;
         }
 
         return generated;
     }
 
-    /**
-     * Applies a pattern on the given prefix and suffix and converts it to one username.
-     *
-     * @param prefix The prefix (or first username).
-     * @param suffix The suffix (or second username).
-     * @return The converted username.
-     */
     private static String applyPattern(String prefix, String suffix) {
-        int pattern = (int) (Math.random() * 4);
+        int pattern = RANDOM.nextInt(4);
         switch (pattern) {
             case 0: {
                 return prefix + "_" + suffix;
             }
             case 1: {
-                return prefix + suffix.substring(0, 2) + (int) (Math.random() * 100);
+                String sfxPart = suffix.length() >= 2 ? suffix.substring(0, 2) : suffix;
+                return prefix + sfxPart + RANDOM.nextInt(100);
             }
             case 2: {
-                int index = (int) (Math.random() * Math.min(prefix.length(), suffix.length()));
+                int index = RANDOM.nextInt(Math.min(prefix.length(), suffix.length()) + 1);
                 return prefix.substring(0, index) + "_" + suffix.substring(index);
             }
             case 3: {
                 StringBuilder merge = new StringBuilder(prefix).append(suffix);
-                int uIndex = (int) (Math.random() * merge.length());
-                int nIndex = (int) (Math.random() * merge.length());
-                merge.insert(uIndex, "_");
-                merge.insert(nIndex, (int) (Math.random() * 100));
+                if (merge.length() == 0) return "";
+                int uIndex = RANDOM.nextInt(merge.length() + 1);
+                int nIndex = RANDOM.nextInt(merge.length() + 1);
+                if (uIndex < nIndex) {
+                    merge.insert(nIndex, RANDOM.nextInt(100));
+                    merge.insert(uIndex, "_");
+                } else {
+                    merge.insert(uIndex, "_");
+                    merge.insert(nIndex, RANDOM.nextInt(100));
+                }
                 return merge.toString();
             }
             default: {
@@ -109,21 +117,19 @@ public class UsernameGenerator {
         }
     }
 
-    /**
-     * Applies a pattern on the given username.
-     *
-     * @param username The username.
-     * @return The converted username.
-     */
     private static String applyPattern(String username) {
+        if (username == null || username.isEmpty()) {
+            return username;
+        }
+
         double numberChance = 0.125;
         double upperChance = 0.25;
 
         char[] chars = username.toCharArray();
         for (int i = 0; i < chars.length; ++i) {
             char c = chars[i];
-            if ((i == 0 || (chars[i - 1] == '_' || Character.isDigit(chars[i - 1])) && Character.isLetter(c))) {
-                if (Math.random() < upperChance) {
+            if (Character.isLetter(c) && (i == 0 || (chars[i - 1] == '_' || Character.isDigit(chars[i - 1])))) {
+                if (RANDOM.nextDouble() < upperChance) {
                     chars[i] = Character.toUpperCase(c);
                     continue;
                 }
@@ -132,7 +138,7 @@ public class UsernameGenerator {
             char lower = Character.toLowerCase(c);
             char replacement = getReplacement(lower);
             if (replacement != lower) {
-                if (Math.random() < numberChance) {
+                if (RANDOM.nextDouble() < numberChance) {
                     chars[i] = replacement;
                     numberChance *= 0.5;
                 }
@@ -142,12 +148,6 @@ public class UsernameGenerator {
         return new String(chars);
     }
 
-    /**
-     * Gets the replacement for the given character. (e.g. 'a' -> '4')
-     *
-     * @param c The character.
-     * @return The replacement for the given character.
-     */
     private static char getReplacement(char c) {
         if (c == 'a') {
             return '4';
@@ -159,9 +159,10 @@ public class UsernameGenerator {
             return '0';
         } else if (c == 't') {
             return '7';
+        } else if (c == 's') {
+            return '5';
         } else {
             return c;
         }
     }
 }
-

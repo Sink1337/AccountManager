@@ -1,4 +1,4 @@
-package me.ksyzov.accountmanager.auth;
+package me.ksyz.accountmanager.auth;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Session;

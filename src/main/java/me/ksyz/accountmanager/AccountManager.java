@@ -1,15 +1,11 @@
-package me.ksyzov.accountmanager;
+package me.ksyz.accountmanager;
 
 import com.google.gson.*;
-<<<<<<< HEAD:src/main/java/me/ksyz/accountmanager/AccountManager.java
 import me.ksyz.accountmanager.auth.Account;
 import me.ksyz.accountmanager.utils.SSLUtil;
-=======
-import me.ksyzov.accountmanager.auth.Account;
-import me.ksyzov.accountmanager.auth.AccountType;
-import me.ksyzov.accountmanager.auth.CookieAuth;
-import me.ksyzov.accountmanager.gui.GuiCookieAuth;
->>>>>>> pr-4:src/main/java/me/ksyzov/accountmanager/AccountManager.java
+import me.ksyz.accountmanager.auth.AccountType;
+import me.ksyz.accountmanager.auth.CookieAuth;
+import me.ksyz.accountmanager.gui.GuiCookieAuth;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraftforge.common.MinecraftForge;

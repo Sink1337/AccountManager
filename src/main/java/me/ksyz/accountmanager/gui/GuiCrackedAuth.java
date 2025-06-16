@@ -1,7 +1,7 @@
-package me.ksyzov.accountmanager.gui;
+package me.ksyz.accountmanager.gui;
 
-import me.ksyzov.accountmanager.auth.CrackedAuth;
-import me.ksyzov.accountmanager.utils.UsernameGenerator;
+import me.ksyz.accountmanager.auth.CrackedAuth;
+import me.ksyz.accountmanager.utils.UsernameGenerator;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.gui.GuiButton;
@@ -16,6 +16,7 @@ public class GuiCrackedAuth extends GuiScreen {
     private GuiTextField usernameField;
     private GuiButton loginButton;
     private GuiButton generateRandomButton;
+    private GuiButton cancelButton = null;
 
     public GuiCrackedAuth(GuiScreen previousScreen) {
         this.previousScreen = previousScreen;
@@ -28,7 +29,8 @@ public class GuiCrackedAuth extends GuiScreen {
         usernameField.setMaxStringLength(16); // Minecraft usernames are limited to 16 characters
         usernameField.setFocused(true);
         buttonList.add(loginButton = new GuiButton(0, width / 2 - 100, height / 2, 200, 20, "Login"));
-        buttonList.add(generateRandomButton = new GuiButton(1, width / 2 - 100, height / 2 + 30, 200, 20, "Generate Random"));
+        buttonList.add(generateRandomButton = new GuiButton(1, width / 2 - 100, height / 2 + 25, 200, 20, "Generate Random"));
+        buttonList.add(cancelButton = new GuiButton(2, width / 2 - 100, height / 2 + 50, 200, 20, "Cancel"));
     }
 
     @Override
@@ -67,6 +69,9 @@ public class GuiCrackedAuth extends GuiScreen {
                 break;
             case 1: // Generate Random
                 handleGenerateRandom();
+                break;
+            case 2: // Cancel;
+                mc.displayGuiScreen(previousScreen);
                 break;
             default:
                 System.err.println("Unknown button ID: " + button.id);

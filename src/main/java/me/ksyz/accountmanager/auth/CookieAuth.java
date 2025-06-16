@@ -1,11 +1,11 @@
-package me.ksyzov.accountmanager.auth;
+package me.ksyz.accountmanager.auth;
 
 import com.google.gson.Gson;
-import me.ksyzov.accountmanager.AccountManager;
-import me.ksyzov.accountmanager.gui.GuiAccountManager;
-import me.ksyzov.accountmanager.gui.GuiCookieAuth;
-import me.ksyzov.accountmanager.utils.Notification;
-import me.ksyzov.accountmanager.utils.TextFormatting;
+import me.ksyz.accountmanager.AccountManager;
+import me.ksyz.accountmanager.gui.GuiAccountManager;
+import me.ksyz.accountmanager.gui.GuiCookieAuth;
+import me.ksyz.accountmanager.utils.Notification;
+import me.ksyz.accountmanager.utils.TextFormatting;
 import net.minecraft.util.Session;
 
 import javax.net.ssl.HttpsURLConnection;

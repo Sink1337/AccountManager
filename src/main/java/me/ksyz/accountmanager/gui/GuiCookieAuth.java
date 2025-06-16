@@ -1,7 +1,7 @@
-package me.ksyzov.accountmanager.gui;
+package me.ksyz.accountmanager.gui;
 
-import me.ksyzov.accountmanager.auth.CookieAuth;
-import me.ksyzov.accountmanager.utils.TextFormatting;
+import me.ksyz.accountmanager.auth.CookieAuth;
+import me.ksyz.accountmanager.utils.TextFormatting;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;

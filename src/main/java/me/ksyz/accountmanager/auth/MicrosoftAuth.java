@@ -1,4 +1,4 @@
-package me.ksyzov.accountmanager.auth;
+package me.ksyz.accountmanager.auth;
 
 import com.google.gson.*;
 import com.sun.net.httpserver.HttpServer;
