@@ -99,7 +99,7 @@ public class Account {
             Optional.ofNullable(jsonObject.get("refreshToken")).map(JsonElement::getAsString).orElse(""),
             Optional.ofNullable(jsonObject.get("accessToken")).map(JsonElement::getAsString).orElse(""),
             Optional.ofNullable(jsonObject.get("username")).map(JsonElement::getAsString).orElse(""),
-            Optional.ofNullable(jsonObject.get("uuid")).map(JsonElement::getAsString).orElse(""), // 从 JSON 读取 uuid
+            Optional.ofNullable(jsonObject.get("uuid")).map(JsonElement::getAsString).orElse(""),
             Optional.ofNullable(jsonObject.get("unban")).map(JsonElement::getAsLong).orElse(0L),
             Optional.ofNullable(jsonObject.get("type")).map(JsonElement::getAsString).map(AccountType::valueOf).orElse(AccountType.PREMIUM)
     );

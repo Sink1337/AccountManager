@@ -348,11 +348,16 @@ public class GuiAccountManager extends GuiScreen {
       String username = account.getUsername();
       if (StringUtils.isBlank(username)) {
         username = "&7&l?";
-      } else if (account.getAccessToken().equals(SessionManager.get().getToken())) {
-        username = String.format("&a&l%s", username);
-      } else if (username.equals(SessionManager.get().getUsername())) {
-        username = String.format("&a%s", username);
       }
+
+      if (SessionManager.get() != null) {
+        if (account.getType() == AccountType.CRACKED && username.equals(SessionManager.get().getUsername())) {
+          username = String.format("&a&l%s", username);
+        } else if (account.getType() == AccountType.PREMIUM && account.getUsername().equals(SessionManager.get().getUsername())) {
+          username = String.format("&a&l%s", username);
+        }
+      }
+
       String accountTypeSuffix = account.getType() == AccountType.CRACKED
               ? " &7(Cracked)"
               : " &7(Premium)";
@@ -362,7 +367,6 @@ public class GuiAccountManager extends GuiScreen {
 
       GuiAccountManager.this.drawString(fr, translatedUsername, x + 2, int_4 + 2, -1);
       GuiAccountManager.this.drawString(fr, translatedSuffix, x + 2 + fr.getStringWidth(translatedUsername), int_4 + 2, -1);
-
 
       long currentTime = System.currentTimeMillis();
       long unbanTime = account.getUnban();

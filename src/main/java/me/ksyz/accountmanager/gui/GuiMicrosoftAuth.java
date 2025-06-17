@@ -33,21 +33,26 @@ public class GuiMicrosoftAuth extends GuiScreen {
   private CompletableFuture<Void> task = null;
   private boolean success = false;
 
+  private long lastDotUpdateTime;
+  private int dotCount;
+  private static final long DOT_ANIMATION_INTERVAL = 200L;
+
   public GuiMicrosoftAuth(GuiScreen previousScreen) {
     this.previousScreen = previousScreen;
     this.state = RandomStringUtils.randomAlphanumeric(8);
+    this.lastDotUpdateTime = System.currentTimeMillis();
+    this.dotCount = 0;
   }
 
   @Override
   public void initGui() {
     buttonList.clear();
-    int buttonWidth = 75;
+    int buttonWidth = 200;
     int buttonHeight = 20;
-    int spacing = 2;
-    int totalWidth = buttonWidth * 3 + spacing * 2; // 229
+    int spacing = 5;
     int centerX = width / 2;
-    int startX = centerX - totalWidth / 2;
-    int baseY = height / 2 + fontRendererObj.FONT_HEIGHT / 2 + fontRendererObj.FONT_HEIGHT;
+    int startX = centerX - buttonWidth / 2;
+    int baseY = height / 2 + fontRendererObj.FONT_HEIGHT / 2 + fontRendererObj.FONT_HEIGHT * 2;
 
     buttonList.add(openButton = new GuiButton(
             0,
@@ -55,33 +60,35 @@ public class GuiMicrosoftAuth extends GuiScreen {
             baseY,
             buttonWidth,
             buttonHeight,
-            "Open"
+            "Open Link"
     ));
     buttonList.add(copyButton = new GuiButton(
             1,
-            startX + buttonWidth + spacing,
-            baseY,
+            startX,
+            baseY + buttonHeight + spacing,
             buttonWidth,
             buttonHeight,
-            "Copy"
+            "Copy Link"
     ));
     buttonList.add(cancelButton = new GuiButton(
             2,
-            startX + (buttonWidth + spacing) * 2,
-            baseY,
+            startX,
+            baseY + (buttonHeight + spacing) * 2,
             buttonWidth,
             buttonHeight,
             "Cancel"
     ));
 
     if (task == null) {
-      status = null;
+      status = "&fWaiting for login&r";
 
       if (executor == null) {
         executor = Executors.newSingleThreadExecutor();
       }
-      AtomicReference<String> refreshToken = new AtomicReference<>("");
-      AtomicReference<String> accessToken = new AtomicReference<>("");
+      AtomicReference<String> refreshTokenRef = new AtomicReference<>("");
+      AtomicReference<String> accessTokenRef = new AtomicReference<>("");
+      AtomicReference<String> uuidRef = new AtomicReference<>("");
+
       task = MicrosoftAuth.acquireMSAuthCode(state, executor)
               .thenComposeAsync(msAuthCode -> {
                 openButtonEnabled = false;
@@ -89,8 +96,8 @@ public class GuiMicrosoftAuth extends GuiScreen {
                 return MicrosoftAuth.acquireMSAccessTokens(msAuthCode, executor);
               })
               .thenComposeAsync(msAccessTokens -> {
-                status = "&fAcquiring Xbox access token&r";
-                refreshToken.set(msAccessTokens.get("refresh_token"));
+                status = "&fAcquiring Xbox access token.&r";
+                refreshTokenRef.set(msAccessTokens.get("refresh_token"));
                 return MicrosoftAuth.acquireXboxAccessToken(msAccessTokens.get("access_token"), executor);
               })
               .thenComposeAsync(xboxAccessToken -> {
@@ -105,14 +112,20 @@ public class GuiMicrosoftAuth extends GuiScreen {
               })
               .thenComposeAsync(mcToken -> {
                 status = "&fFetching your Minecraft profile&r";
-                accessToken.set(mcToken);
+                accessTokenRef.set(mcToken);
                 return MicrosoftAuth.login(mcToken, executor);
               })
               .thenAccept(session -> {
                 status = null;
+                cause = null;
+
                 Account acc = new Account(
-                        refreshToken.get(), accessToken.get(), session.getUsername()
+                        refreshTokenRef.get(),
+                        accessTokenRef.get(),
+                        session.getUsername(),
+                        session.getPlayerID()
                 );
+
                 for (Account account : AccountManager.accounts) {
                   if (acc.getUsername().equals(account.getUsername())) {
                     acc.setUnban(account.getUnban());
@@ -125,9 +138,11 @@ public class GuiMicrosoftAuth extends GuiScreen {
                 success = true;
               })
               .exceptionally(error -> {
-                openButtonEnabled = false;
-                status = String.format("&c%s&r", error.getMessage());
-                cause = error.getCause() != null ? String.format("&c%s&r", error.getCause().getMessage()) : null;
+                openButtonEnabled = true;
+                status = String.format("&cLogin failed!&r");
+                cause = error.getCause() != null && error.getCause().getMessage() != null
+                        ? String.format("&cReason: %s&r", error.getCause().getMessage())
+                        : String.format("&cUnknown error occurred.&r");
                 return null;
               });
     }
@@ -156,6 +171,16 @@ public class GuiMicrosoftAuth extends GuiScreen {
       ));
       success = false;
     }
+
+    if (status != null && !success && task != null && !task.isDone()) {
+      long currentTime = System.currentTimeMillis();
+      if (currentTime - lastDotUpdateTime >= DOT_ANIMATION_INTERVAL) {
+        dotCount = (dotCount + 1) % 4;
+        lastDotUpdateTime = currentTime;
+      }
+    } else {
+      dotCount = 0;
+    }
   }
 
   @Override
@@ -163,6 +188,10 @@ public class GuiMicrosoftAuth extends GuiScreen {
     if (openButton != null) {
       openButton.enabled = openButtonEnabled;
     }
+    if (copyButton != null) {
+      copyButton.enabled = openButtonEnabled;
+    }
+
     drawDefaultBackground();
     super.drawScreen(mouseX, mouseY, partialTicks);
 
@@ -172,22 +201,22 @@ public class GuiMicrosoftAuth extends GuiScreen {
     );
 
     if (status != null) {
+      String displayedStatus = status;
+      if (task != null && !task.isDone() && cause == null) {
+        for (int i = 0; i < dotCount; i++) {
+          displayedStatus += ".";
+        }
+      }
       drawCenteredString(
-              fontRendererObj, TextFormatting.translate(status),
+              fontRendererObj, TextFormatting.translate(displayedStatus),
               width / 2, height / 2 - fontRendererObj.FONT_HEIGHT / 2, -1
       );
     }
 
     if (cause != null) {
-      String causeText = TextFormatting.translate(cause);
-      Gui.drawRect(
-              0, height - 2 - fontRendererObj.FONT_HEIGHT - 3,
-              3 + mc.fontRendererObj.getStringWidth(causeText) + 3, height,
-              0x64000000
-      );
-      drawString(
+      drawCenteredString(
               fontRendererObj, TextFormatting.translate(cause),
-              3, height - 2 - fontRendererObj.FONT_HEIGHT, -1
+              width / 2, height / 2 + fontRendererObj.FONT_HEIGHT / 2 + fontRendererObj.FONT_HEIGHT, 0xFFAAAA
       );
     }
   }
@@ -207,21 +236,29 @@ public class GuiMicrosoftAuth extends GuiScreen {
 
     if (button.enabled) {
       switch (button.id) {
-        case 0: { // Open
+        case 0: {
           SystemUtils.openWebLink(MicrosoftAuth.getMSAuthLink(state));
+          status = "&fPlease complete the login in your browser&r";
+          cause = null;
+          lastDotUpdateTime = System.currentTimeMillis();
+          dotCount = 0;
         }
         break;
-        case 1: { // Copy
+        case 1: {
           URI url = MicrosoftAuth.getMSAuthLink(state);
           if (url != null) {
             SystemUtils.setClipboard(url.toString());
-            status = "&fLogin link has been copied to the clipboard!&r";
+            status = "&aLogin link copied!&r";
+            cause = null;
+            dotCount = 0;
           } else {
-            status = "&cFailed to get login link&r";
+            status = "&cFailed to get login link.&r";
+            cause = "&cPlease try again.&r";
+            dotCount = 0;
           }
         }
         break;
-        case 2: { // Cancel
+        case 2: {
           mc.displayGuiScreen(previousScreen);
           break;
         }

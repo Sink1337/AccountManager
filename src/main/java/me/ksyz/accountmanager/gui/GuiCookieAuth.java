@@ -32,20 +32,27 @@ public class GuiCookieAuth extends GuiScreen {
     @Override
     public void initGui() {
         buttonList.clear();
+        int buttonWidth = 200;
+        int buttonHeight = 20;
+        int spacing = 5;
+        int centerX = width / 2;
+        int startX = centerX - buttonWidth / 2;
+        int baseY = height / 2 + fontRendererObj.FONT_HEIGHT / 2 + fontRendererObj.FONT_HEIGHT * 2;
+
         buttonList.add(openButton = new GuiButton(
                 0,
-                width / 2 - 75 - 2,
-                height / 2 + fontRendererObj.FONT_HEIGHT / 2 + fontRendererObj.FONT_HEIGHT,
-                75,
-                20,
-                "Open"
+                startX,
+                baseY,
+                buttonWidth,
+                buttonHeight,
+                "Open Cookie File"
         ));
         buttonList.add(cancelButton = new GuiButton(
                 1,
-                width / 2 + 2,
-                height / 2 + fontRendererObj.FONT_HEIGHT / 2 + fontRendererObj.FONT_HEIGHT,
-                75,
-                20,
+                startX,
+                baseY + buttonHeight + spacing,
+                buttonWidth,
+                buttonHeight,
                 "Cancel"
         ));
 
@@ -104,9 +111,6 @@ public class GuiCookieAuth extends GuiScreen {
             actionPerformed(cancelButton);
         }
     }
-
-
-
 
     @Override
     protected void actionPerformed(GuiButton button) {
