@@ -1,6 +1,8 @@
 package me.ksyz.accountmanager.auth;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import me.ksyz.accountmanager.AccountManager;
 import me.ksyz.accountmanager.gui.GuiAccountManager;
 import me.ksyz.accountmanager.gui.GuiCookieAuth;
@@ -18,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class CookieAuth {
     private static final ExecutorService executor = Executors.newFixedThreadPool(4);
@@ -29,7 +32,7 @@ public class CookieAuth {
 
     public static class ProfileResponse {
         public String name;
-        String id;
+        public String id;
     }
 
     public static CompletableFuture<Boolean> addAccountFromCookieFile(File cookieFile, GuiCookieAuth gui) {
@@ -61,6 +64,9 @@ public class CookieAuth {
 
                 authenticateWithCookies(cookieString, gui, null).whenComplete((result, ex) -> {
                     if (ex != null) {
+                        System.err.println("[CookieAuth] Authentication failed: " + ex.getMessage());
+                        ex.printStackTrace();
+                        gui.status = "&cAuthentication failed: " + ex.getMessage() + "&r";
                         future.complete(false);
                     } else {
                         future.complete(result);
@@ -75,7 +81,6 @@ public class CookieAuth {
 
         return future;
     }
-
 
 
     public static String buildCookieString(Map<String, String> cookies) {
@@ -103,7 +108,7 @@ public class CookieAuth {
         conn.connect();
         String location1 = conn.getHeaderField("Location");
         if (location1 == null) {
-            throw new Exception("Redirect failed at step 1");
+            throw new Exception("Redirect failed at step 1: No Location header.");
         }
         location1 = location1.replaceAll(" ", "%20");
         conn.disconnect();
@@ -122,7 +127,7 @@ public class CookieAuth {
         conn.connect();
         String location2 = conn.getHeaderField("Location");
         if (location2 == null) {
-            throw new Exception("Redirect failed at step 2");
+            throw new Exception("Redirect failed at step 2: No Location header.");
         }
         conn.disconnect();
 
@@ -140,7 +145,7 @@ public class CookieAuth {
         conn.connect();
         String location3 = conn.getHeaderField("Location");
         if (location3 == null) {
-            throw new Exception("Redirect failed at step 3");
+            throw new Exception("Redirect failed at step 3: No Location header.");
         }
         conn.disconnect();
         return location3;
@@ -153,21 +158,29 @@ public class CookieAuth {
                 String finalLocation = followRedirectChain(cookieString);
 
                 gui.status = "&fExtracting access token from redirect...&r";
-                String accessToken = finalLocation.split("accessToken=")[1];
+                if (!finalLocation.contains("accessToken=")) {
+                    throw new Exception("Failed to find accessToken in final redirect URL.");
+                }
+                String accessToken = finalLocation.split("accessToken=")[1].split("&")[0];
 
                 gui.status = "&fDecoding access token...&r";
-                String decoded = new String(Base64.getDecoder().decode(accessToken), StandardCharsets.UTF_8);
+                String decoded = new String(Base64.getUrlDecoder().decode(accessToken), StandardCharsets.UTF_8);
 
                 gui.status = "&fParsing token data...&r";
-                String[] parts = decoded.split("\"rp://api.minecraftservices.com/\",");
-                if (parts.length < 2) {
-                    throw new Exception("Failed to decode token");
-                }
-                String rest = parts[1];
+                Gson localGson = new Gson();
+                JsonObject decodedJson = localGson.fromJson(decoded, JsonObject.class);
 
-                gui.status = "&fExtracting XBL token components...&r";
-                String token = rest.split("\"Token\":\"")[1].split("\"")[0];
-                String uhs = rest.split(Pattern.quote("{\"DisplayClaims\":{\"xui\":[{\"uhs\":\""))[1].split("\"")[0];
+                String token = Optional.ofNullable(decodedJson.get("Token"))
+                        .map(JsonElement::getAsString)
+                        .orElseThrow(() -> new Exception("Missing 'Token' in decoded access token."));
+                String uhs = Optional.ofNullable(decodedJson.getAsJsonObject("DisplayClaims"))
+                        .map(obj -> obj.getAsJsonObject("xui"))
+                        .map(obj -> obj.getAsJsonArray("xui"))
+                        .map(arr -> arr.get(0).getAsJsonObject())
+                        .map(obj -> obj.get("uhs"))
+                        .map(JsonElement::getAsString)
+                        .orElseThrow(() -> new Exception("Missing 'uhs' in decoded access token."));
+
                 String xblToken = "XBL3.0 x=" + uhs + ";" + token;
 
                 gui.status = "&fAuthenticating with Xbox Live...&r";
@@ -181,8 +194,8 @@ public class CookieAuth {
 
                 gui.status = "&fRetrieving Minecraft profile...&r";
                 ProfileResponse profileRes = getMinecraftProfile(mcRes.access_token);
-                if (profileRes == null || profileRes.name == null) {
-                    System.err.println("[AuthFlow] Failed to get Minecraft profile");
+                if (profileRes == null || profileRes.name == null || profileRes.id == null) {
+                    System.err.println("[AuthFlow] Failed to get Minecraft profile (name or id missing)");
                     gui.status = "&cFailed to get Minecraft profile&r";
                     return false;
                 }
@@ -192,15 +205,17 @@ public class CookieAuth {
                         profileRes.name,
                         profileRes.id,
                         mcRes.access_token,
-                        "legacy"
+                        "mojang"
                 );
 
                 gui.status = "&aSaving account details...&r";
                 AccountManager.accounts.add(new Account(
                         "",
                         mcRes.access_token,
-                        session.getUsername(),
-                        System.currentTimeMillis()
+                        profileRes.name,
+                        profileRes.id,
+                        0L,
+                        AccountType.PREMIUM
                 ));
 
                 AccountManager.save();
@@ -211,7 +226,8 @@ public class CookieAuth {
                 return true;
             } catch (Exception e) {
                 System.err.println("[AuthFlow] Authentication failed: " + e.getMessage());
-                gui.status = "&cInvalid Cookie File&r";
+                e.printStackTrace();
+                gui.status = "&cInvalid Cookie File: " + e.getMessage() + "&r";
                 return false;
             }
         });
@@ -230,6 +246,12 @@ public class CookieAuth {
         try (OutputStream os = conn.getOutputStream()) {
             os.write(payload.getBytes(StandardCharsets.UTF_8));
         }
+        int responseCode = conn.getResponseCode();
+        if (responseCode != HttpsURLConnection.HTTP_OK) {
+            String errorResponse = new BufferedReader(new InputStreamReader(conn.getErrorStream(), StandardCharsets.UTF_8)).lines().collect(Collectors.joining("\n"));
+            throw new IOException("HTTP error code: " + responseCode + ", Response: " + errorResponse);
+        }
+
         StringBuilder response = new StringBuilder();
         try (InputStream is = conn.getInputStream();
              BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
@@ -237,8 +259,9 @@ public class CookieAuth {
             while ((line = reader.readLine()) != null) {
                 response.append(line);
             }
+        } finally {
+            conn.disconnect();
         }
-        conn.disconnect();
         return gson.fromJson(response.toString(), McResponse.class);
     }
 
@@ -249,6 +272,13 @@ public class CookieAuth {
         conn.setRequestMethod("GET");
         conn.setRequestProperty("Authorization", "Bearer " + accessToken);
         conn.setRequestProperty("Accept", "application/json");
+
+        int responseCode = conn.getResponseCode();
+        if (responseCode != HttpsURLConnection.HTTP_OK) {
+            String errorResponse = new BufferedReader(new InputStreamReader(conn.getErrorStream(), StandardCharsets.UTF_8)).lines().collect(Collectors.joining("\n"));
+            throw new IOException("HTTP error code: " + responseCode + ", Response: " + errorResponse);
+        }
+
         StringBuilder response = new StringBuilder();
         try (InputStream is = conn.getInputStream();
              BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
@@ -256,8 +286,9 @@ public class CookieAuth {
             while ((line = reader.readLine()) != null) {
                 response.append(line);
             }
+        } finally {
+            conn.disconnect();
         }
-        conn.disconnect();
         return gson.fromJson(response.toString(), ProfileResponse.class);
     }
 

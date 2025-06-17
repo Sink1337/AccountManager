@@ -51,11 +51,13 @@ public class AccountManager {
         JsonArray jsonArray = json.getAsJsonArray();
         for (JsonElement jsonElement : jsonArray) {
           JsonObject jsonObject = jsonElement.getAsJsonObject();
-          accounts.add(Account.fromJson(jsonObject)); 
+          accounts.add(Account.fromJson(jsonObject));
         }
       }
     } catch (FileNotFoundException e) {
       System.err.print("Couldn't find accounts.json!");
+    } catch (JsonSyntaxException e) {
+      System.err.println("Error parsing accounts.json: " + e.getMessage());
     }
   }
 
@@ -63,7 +65,7 @@ public class AccountManager {
     try {
       JsonArray jsonArray = new JsonArray();
       for (Account account : accounts) {
-        jsonArray.add(account.toJson()); 
+        jsonArray.add(account.toJson());
       }
       PrintWriter printWriter = new PrintWriter(new FileWriter(file));
       printWriter.println(gson.toJson(jsonArray));
@@ -73,18 +75,27 @@ public class AccountManager {
     }
   }
 
+  /**
+   * Adds a cracked account to the account manager.
+   * Cracked accounts typically do not have a real UUID from Mojang/Microsoft,
+   * so an empty string is provided for the UUID.
+   *
+   * @param username The username of the cracked account.
+   */
   public static void addCrackedAccount(String username) {
     Optional<Account> existingAccount = accounts.stream()
             .filter(acc -> acc.getUsername().equalsIgnoreCase(username) && acc.getType() == AccountType.CRACKED)
             .findFirst();
 
     if (existingAccount.isPresent()) {
+      System.out.println("Cracked account " + username + " already exists. Skipping add.");
       return;
     }
     accounts.add(new Account(
             "",
             "accessToken",
             username,
+            "",
             0L,
             AccountType.CRACKED
     ));
@@ -97,10 +108,4 @@ public class AccountManager {
     GuiCookieAuth gui = new GuiCookieAuth(previousScreen);
     CookieAuth.addAccountFromCookieFile(cookieFile, gui);
   }
-
-  /**
-   * Adds a cracked account to the account manager.
-   *
-   * @param username The username of the cracked account.
-   */
 }

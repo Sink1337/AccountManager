@@ -147,7 +147,7 @@ public final class MicrosoftAuth {
 
       SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(
               socketFactory,
-              new String[] { "TLSv1.2" },
+              new String[]{"TLSv1.2"},
               null,
               new BrowserCompatHostnameVerifier()
       );
@@ -397,6 +397,14 @@ public final class MicrosoftAuth {
     }, executor);
   }
 
+  /**
+   * Attempts to log in using a Minecraft Access Token and fetches the profile from Mojang API.
+   * This is the original login method.
+   *
+   * @param mcToken The Minecraft Access Token.
+   * @param executor The executor to run the asynchronous task on.
+   * @return A CompletableFuture that completes with a Session object.
+   */
   public static CompletableFuture<Session> login(String mcToken, Executor executor) {
     return CompletableFuture.supplyAsync(() -> {
       try (CloseableHttpClient client = createTrustedHttpClient()) {
@@ -410,6 +418,13 @@ public final class MicrosoftAuth {
 
         // Attempt to parse the response body as JSON and extract the profile
         JsonObject json = new JsonParser().parse(EntityUtils.toString(res.getEntity())).getAsJsonObject();
+
+        // Check for errors first
+        if (json.has("error")) {
+          throw new Exception(String.format("%s: %s", json.get("error").getAsString(), json.get("errorMessage").getAsString()));
+        }
+
+        // If present, return
         return Optional.ofNullable(json.get("id"))
                 .map(JsonElement::getAsString)
                 .filter(uuid -> !StringUtils.isBlank(uuid))
@@ -420,16 +435,40 @@ public final class MicrosoftAuth {
                         mcToken,
                         Session.Type.MOJANG.toString()
                 ))
-                // Otherwise, throw an exception with the error description (if present)
-                .orElseThrow(() -> new Exception(json.has("error") ?
-                        String.format("%s: %s", json.get("error").getAsString(), json.get("errorMessage").getAsString()) :
-                        "There was no profile or error description present."
-                ));
+                // Otherwise, throw an exception if UUID is missing for some reason
+                .orElseThrow(() -> new Exception("Minecraft profile ID (UUID) was missing from the response."));
       } catch (InterruptedException e) {
         throw new CancellationException("Minecraft profile fetching was cancelled!");
       } catch (Exception e) {
         throw new CompletionException("Unable to fetch Minecraft profile!", e);
       }
+    }, executor);
+  }
+
+  /**
+   * Creates a Minecraft Session directly from a given access token, username, and UUID.
+   * This method bypasses the Mojang profile fetching API, useful for pre-known credentials.
+   *
+   * @param accessToken The Minecraft Access Token.
+   * @param username The desired username for the session.
+   * @param uuid The desired UUID for the session.
+   * @param executor The executor to run the asynchronous task on.
+   * @return A CompletableFuture that completes with a Session object.
+   */
+  public static CompletableFuture<Session> login(String accessToken, String username, String uuid, Executor executor) {
+    return CompletableFuture.supplyAsync(() -> {
+      // Validate inputs for direct session creation
+      if (StringUtils.isBlank(accessToken) || StringUtils.isBlank(username) || StringUtils.isBlank(uuid)) {
+        throw new IllegalArgumentException("Access Token, Username, and UUID cannot be empty for direct login.");
+      }
+
+      // Create and return the Session directly
+      return new Session(
+              username,
+              uuid, // Ensure this is the raw UUID string, not formatted.
+              accessToken,
+              Session.Type.MOJANG.toString() // Or Session.Type.LEGACY/MSFT depending on your needs
+      );
     }, executor);
   }
 }

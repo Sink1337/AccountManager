@@ -9,12 +9,15 @@ import me.ksyz.accountmanager.utils.TextFormatting;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
+import org.apache.commons.lang3.StringUtils;
 import org.lwjgl.input.Keyboard;
 
 import java.io.IOException;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
 
 public class GuiTokenLogin extends GuiScreen {
     private final GuiScreen previousScreen;
@@ -25,6 +28,10 @@ public class GuiTokenLogin extends GuiScreen {
     private String status = "§7Enter your Minecraft Access Token§r";
     private ExecutorService executor;
     private CompletableFuture<Void> task;
+
+    private static final Pattern UUID_PATTERN = Pattern.compile(
+            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    );
 
     public GuiTokenLogin(GuiScreen previousScreen) {
         this.previousScreen = previousScreen;
@@ -53,7 +60,9 @@ public class GuiTokenLogin extends GuiScreen {
         Keyboard.enableRepeatEvents(false);
         if (task != null && !task.isDone()) {
             task.cancel(true);
-            executor.shutdownNow();
+            if (executor != null && !executor.isShutdown()) {
+                executor.shutdownNow();
+            }
         }
     }
 
@@ -62,9 +71,9 @@ public class GuiTokenLogin extends GuiScreen {
         if (button.enabled) {
             switch (button.id) {
                 case 0: // Login
-                    String token = tokenField.getText().trim();
-                    if (!token.isEmpty()) {
-                        loginWithToken(token);
+                    String input = tokenField.getText().trim();
+                    if (!input.isEmpty()) {
+                        loginWithToken(input);
                     }
                     break;
                 case 1: // Cancel
@@ -111,18 +120,60 @@ public class GuiTokenLogin extends GuiScreen {
         super.drawScreen(mouseX, mouseY, partialTicks);
     }
 
-    private void loginWithToken(String token) {
-        if (executor == null) {
+    private void loginWithToken(String input) {
+        if (executor == null || executor.isShutdown()) {
             executor = Executors.newSingleThreadExecutor();
         }
 
         status = "§7Authenticating...§r";
         loginButton.enabled = false;
 
-        task = MicrosoftAuth.login(token, executor)
+        String token;
+        String usernameFromInput = "";
+        String uuidFromInput = "";
+
+        String[] parts = input.split("\\|");
+        token = parts[0];
+
+        if (parts.length > 1) {
+            usernameFromInput = parts[1];
+        }
+        if (parts.length > 2) {
+            String potentialUuid = parts[2];
+            if (UUID_PATTERN.matcher(potentialUuid).matches()) {
+                uuidFromInput = potentialUuid;
+            } else {
+                System.err.println("Invalid UUID format detected: " + potentialUuid + ". Proceeding without provided UUID.");
+            }
+        }
+
+        CompletableFuture<net.minecraft.util.Session> loginFuture;
+
+        if (!StringUtils.isBlank(usernameFromInput) && !StringUtils.isBlank(uuidFromInput)) {
+            loginFuture = MicrosoftAuth.login(token, usernameFromInput, uuidFromInput, executor);
+        } else {
+            loginFuture = MicrosoftAuth.login(token, executor);
+        }
+
+        task = loginFuture
                 .thenAcceptAsync(session -> {
-                    Account acc = new Account("", token, session.getUsername());
-                    AccountManager.accounts.add(acc);
+                    String finalUsername = session.getUsername();
+                    String finalUuid = session.getPlayerID();
+
+                    Optional<Account> existingAccountOptional = AccountManager.accounts.stream()
+                            .filter(acc -> acc.getAccessToken().equals(token))
+                            .findFirst();
+
+                    Account accountToSave;
+                    if (existingAccountOptional.isPresent()) {
+                        accountToSave = existingAccountOptional.get();
+                        accountToSave.setUsername(finalUsername);
+                        accountToSave.setUuid(finalUuid);
+                    } else {
+                        accountToSave = new Account(finalUsername, token, finalUuid);
+                        AccountManager.accounts.add(accountToSave);
+                    }
+
                     AccountManager.save();
                     SessionManager.set(session);
 
@@ -132,7 +183,7 @@ public class GuiTokenLogin extends GuiScreen {
                                 new Notification(
                                         TextFormatting.translate(String.format(
                                                 "§aSuccessful login! (%s)§r",
-                                                session.getUsername()
+                                                finalUsername
                                         )),
                                         5000L
                                 )
@@ -141,7 +192,16 @@ public class GuiTokenLogin extends GuiScreen {
                 }, executor)
                 .exceptionally(error -> {
                     mc.addScheduledTask(() -> {
-                        status = "§c" + error.getCause().getMessage();
+                        String errorMessage = "Login failed!";
+                        if (error != null) {
+                            Throwable cause = error.getCause();
+                            if (cause != null) {
+                                errorMessage = cause.getMessage();
+                            } else {
+                                errorMessage = error.getMessage();
+                            }
+                        }
+                        status = "§c" + errorMessage;
                         loginButton.enabled = true;
                     });
                     return null;

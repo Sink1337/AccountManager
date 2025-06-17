@@ -199,7 +199,6 @@ public class GuiAccountManager extends GuiScreen {
               return;
             }
 
-            // Handle premium accounts
             notification = new Notification(TextFormatting.translate(String.format(
                     "&7Fetching your Minecraft profile... (%s)&r", username
             )), -1L);
@@ -287,7 +286,6 @@ public class GuiAccountManager extends GuiScreen {
           mc.displayGuiScreen(new GuiMultiplayer(previousScreen));
         }
         break;
-
         default: {
           guiAccountList.actionPerformed(button);
         }
@@ -343,7 +341,7 @@ public class GuiAccountManager extends GuiScreen {
     }
 
     @Override
-    protected void drawSlot(int entryID, int x, int y, int k, int mouseXIn, int mouseYIn) {
+    protected void drawSlot(int entryID, int x, int int_4, int k, int mouseXIn, int mouseYIn) {
       FontRenderer fr = GuiAccountManager.this.fontRendererObj;
       Account account = AccountManager.accounts.get(entryID);
 
@@ -362,8 +360,8 @@ public class GuiAccountManager extends GuiScreen {
       String translatedUsername = TextFormatting.translate(String.format("&r%s", username));
       String translatedSuffix = TextFormatting.translate(accountTypeSuffix);
 
-      GuiAccountManager.this.drawString(fr, translatedUsername, x + 2, y + 2, -1);
-      GuiAccountManager.this.drawString(fr, translatedSuffix, x + 2 + fr.getStringWidth(translatedUsername), y + 2, -1);
+      GuiAccountManager.this.drawString(fr, translatedUsername, x + 2, int_4 + 2, -1);
+      GuiAccountManager.this.drawString(fr, translatedSuffix, x + 2 + fr.getStringWidth(translatedUsername), int_4 + 2, -1);
 
 
       long currentTime = System.currentTimeMillis();
@@ -393,7 +391,7 @@ public class GuiAccountManager extends GuiScreen {
               String.format("&r%s&r", unban)
       );
       GuiAccountManager.this.drawString(
-              fr, unban, x + getListWidth() - 5 - fr.getStringWidth(unban), y + 2, -1
+              fr, unban, x + getListWidth() - 5 - fr.getStringWidth(unban), int_4 + 2, -1
       );
     }
   }
