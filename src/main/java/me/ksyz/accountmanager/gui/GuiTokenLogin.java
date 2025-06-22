@@ -36,19 +36,20 @@ public class GuiTokenLogin extends GuiScreen {
             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
     );
 
-    private static final Pattern FULL_FORMAT_TOKEN_PATTERN = Pattern.compile(
-            "Accesstoken:([a-zA-Z0-9\\-_\\.]+)"
-    );
-    private static final Pattern FULL_FORMAT_USERNAME_PATTERN = Pattern.compile(
-            "McName:([a-zA-Z0-9_]+)"
-    );
-
-    private static final Pattern SIMPLE_FORMAT_PATTERN = Pattern.compile(
-            "([a-zA-Z0-9\\-_\\.]+)\\|([a-zA-Z0-9_]+)\\|?([0-9a-fA-F-]{36})?"
+    private static final Pattern CORE_INFO_EXTRACTION_PATTERN = Pattern.compile(
+            "(?:Accesstoken:([a-zA-Z0-9\\-_\\.]+))|" +
+                    "([a-zA-Z0-9\\-_\\.]+)" +
+                    "(?:\\s*\\|McName:([a-zA-Z0-9_]+))?|" +
+                    "(?:\\s*\\|([a-zA-Z0-9_]+))?" +
+                    "(?:\\s*\\|([0-9a-fA-F-]{36}))?"
     );
 
-    private static final Pattern ACCOUNT_ENTRY_SPLIT_PATTERN = Pattern.compile(
-            "(?=\\[(?:Microsoft_Hit|XGP|unban|[0-9]+|MC|NFA)\\])"
+    private static final Pattern ACCOUNT_FULL_EXTRACTION_PATTERN = Pattern.compile(
+            "(.*?)(Accesstoken:[a-zA-Z0-9\\-_\\.]+)" +
+                    "(?:\\s*\\|([a-zA-Z0-9_]+))?" +
+                    "(?:\\s*\\|([0-9a-fA-F-]{36}))?" +
+                    "|([a-zA-Z0-9\\-_\\.]+)\\|([a-zA-Z0-9_]+)\\|?([0-9a-fA-F-]{36})?",
+            Pattern.DOTALL
     );
 
 
@@ -155,45 +156,29 @@ public class GuiTokenLogin extends GuiScreen {
         status = "§7Processing accounts...§r";
         loginButton.enabled = false;
 
-        String processedInput = fullInput.replaceAll("\\s+", " ").trim();
-
-        List<String> accountEntries = new ArrayList<>();
-        Matcher matcher = ACCOUNT_ENTRY_SPLIT_PATTERN.matcher(processedInput);
-        int lastIndex = 0;
-
-        while (matcher.find()) {
-            if (matcher.start() > lastIndex) {
-                String entry = processedInput.substring(lastIndex, matcher.start()).trim();
-                entry = entry.replaceAll("^\\[(?:Microsoft_Hit|XGP|unban|[0-9]+|MC|NFA)\\]\\s*", "");
-                if (!entry.isEmpty()) {
-                    accountEntries.add(entry);
-                }
-            }
-            lastIndex = matcher.start();
-        }
-
-        if (lastIndex < processedInput.length()) {
-            String lastEntry = processedInput.substring(lastIndex).trim();
-            lastEntry = lastEntry.replaceAll("^\\[(?:Microsoft_Hit|XGP|unban|[0-9]+|MC|NFA)\\]\\s*", "");
-            if (!lastEntry.isEmpty()) {
-                accountEntries.add(lastEntry);
-            }
-        }
-
-        if (accountEntries.isEmpty() && !processedInput.isEmpty()) {
-            String singleEntry = processedInput.replaceAll("^\\[(?:Microsoft_Hit|XGP|unban|[0-9]+|MC|NFA)\\]\\s*", "");
-            if (!singleEntry.isEmpty()) {
-                accountEntries.add(singleEntry);
-            }
-        }
-
-
         List<CompletableFuture<Void>> loginTasks = new ArrayList<>();
         List<String> failedAccounts = new ArrayList<>();
         List<String> successfulAccounts = new ArrayList<>();
 
-        for (String entry : accountEntries) {
-            String trimmedEntry = entry.trim();
+        Matcher fullExtractorMatcher = ACCOUNT_FULL_EXTRACTION_PATTERN.matcher(fullInput);
+
+        List<String> extractedAccountBlocks = new ArrayList<>();
+        while (fullExtractorMatcher.find()) {
+            if (fullExtractorMatcher.group(2) != null || fullExtractorMatcher.group(5) != null) {
+                int startIndex = fullExtractorMatcher.start();
+                int endIndex = fullExtractorMatcher.end();
+                String accountBlock = fullInput.substring(startIndex, endIndex);
+                extractedAccountBlocks.add(accountBlock);
+            }
+        }
+
+        if (extractedAccountBlocks.isEmpty() && !fullInput.trim().isEmpty()) {
+            extractedAccountBlocks.add(fullInput);
+        }
+
+
+        for (String rawEntry : extractedAccountBlocks) {
+            String trimmedEntry = rawEntry.trim();
             if (trimmedEntry.isEmpty()) {
                 continue;
             }
@@ -202,36 +187,39 @@ public class GuiTokenLogin extends GuiScreen {
             String usernameFromInput = null;
             String uuidFromInput = null;
 
-            Matcher tokenMatcher = FULL_FORMAT_TOKEN_PATTERN.matcher(trimmedEntry);
-            Matcher usernameMatcher = FULL_FORMAT_USERNAME_PATTERN.matcher(trimmedEntry);
+            Matcher coreInfoMatcher = CORE_INFO_EXTRACTION_PATTERN.matcher(trimmedEntry);
 
-            if (tokenMatcher.find()) {
-                token = tokenMatcher.group(1);
-            }
-            if (usernameMatcher.find()) {
-                usernameFromInput = usernameMatcher.group(1);
-            }
-
-            if (token == null || token.isEmpty()) {
-                Matcher simpleFormatMatcher = SIMPLE_FORMAT_PATTERN.matcher(trimmedEntry);
-                if (simpleFormatMatcher.find()) {
-                    token = simpleFormatMatcher.group(1);
-                    if (simpleFormatMatcher.groupCount() >= 2) {
-                        usernameFromInput = simpleFormatMatcher.group(2);
+            while (coreInfoMatcher.find()) {
+                if (coreInfoMatcher.group(1) != null) {
+                    token = coreInfoMatcher.group(1);
+                }
+                if (coreInfoMatcher.group(2) != null) {
+                    if (token == null || token.isEmpty()) {
+                        token = coreInfoMatcher.group(2);
                     }
-                    if (simpleFormatMatcher.groupCount() >= 3) {
-                        String potentialUuid = simpleFormatMatcher.group(3);
-                        if (potentialUuid != null && UUID_PATTERN.matcher(potentialUuid).matches()) {
-                            uuidFromInput = potentialUuid;
-                        } else if (potentialUuid != null) {
-                            System.err.println("Invalid UUID format detected in entry (simple format): " + trimmedEntry + ". Proceeding without provided UUID.");
-                        }
+                }
+                if (coreInfoMatcher.group(3) != null) {
+                    usernameFromInput = coreInfoMatcher.group(3);
+                }
+                if (coreInfoMatcher.group(4) != null) {
+                    if (usernameFromInput == null || usernameFromInput.isEmpty()) {
+                        usernameFromInput = coreInfoMatcher.group(4);
+                    }
+                }
+                if (coreInfoMatcher.group(5) != null) {
+                    String potentialUuid = coreInfoMatcher.group(5);
+                    if (potentialUuid != null && UUID_PATTERN.matcher(potentialUuid).matches()) {
+                        uuidFromInput = potentialUuid;
                     }
                 }
             }
 
+            if (token != null && token.length() < 20 && !token.contains(".")) {
+                token = null;
+            }
+
             if (token == null || token.isEmpty()) {
-                failedAccounts.add("§cInvalid format for: " + (trimmedEntry.length() > 50 ? trimmedEntry.substring(0, 50) + "..." : trimmedEntry) + "§r");
+                failedAccounts.add("§cInvalid format or missing token for: " + (trimmedEntry.length() > 50 ? trimmedEntry.substring(0, 50) + "..." : trimmedEntry) + "§r");
                 continue;
             }
 
