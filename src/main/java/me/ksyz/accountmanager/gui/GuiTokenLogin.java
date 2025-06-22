@@ -47,7 +47,9 @@ public class GuiTokenLogin extends GuiScreen {
             "([a-zA-Z0-9\\-_\\.]+)\\|([a-zA-Z0-9_]+)\\|?([0-9a-fA-F-]{36})?"
     );
 
-    private static final Pattern ACCOUNT_ENTRY_SPLIT_PATTERN = Pattern.compile("(?=\\[Microsoft_Hit\\])");
+    private static final Pattern ACCOUNT_ENTRY_SPLIT_PATTERN = Pattern.compile(
+            "(?=\\[(?:Microsoft_Hit|XGP|unban|[0-9]+|MC|NFA)\\])"
+    );
 
 
     public GuiTokenLogin(GuiScreen previousScreen) {
@@ -162,6 +164,7 @@ public class GuiTokenLogin extends GuiScreen {
         while (matcher.find()) {
             if (matcher.start() > lastIndex) {
                 String entry = processedInput.substring(lastIndex, matcher.start()).trim();
+                entry = entry.replaceAll("^\\[(?:Microsoft_Hit|XGP|unban|[0-9]+|MC|NFA)\\]\\s*", "");
                 if (!entry.isEmpty()) {
                     accountEntries.add(entry);
                 }
@@ -171,13 +174,17 @@ public class GuiTokenLogin extends GuiScreen {
 
         if (lastIndex < processedInput.length()) {
             String lastEntry = processedInput.substring(lastIndex).trim();
+            lastEntry = lastEntry.replaceAll("^\\[(?:Microsoft_Hit|XGP|unban|[0-9]+|MC|NFA)\\]\\s*", "");
             if (!lastEntry.isEmpty()) {
                 accountEntries.add(lastEntry);
             }
         }
 
         if (accountEntries.isEmpty() && !processedInput.isEmpty()) {
-            accountEntries.add(processedInput);
+            String singleEntry = processedInput.replaceAll("^\\[(?:Microsoft_Hit|XGP|unban|[0-9]+|MC|NFA)\\]\\s*", "");
+            if (!singleEntry.isEmpty()) {
+                accountEntries.add(singleEntry);
+            }
         }
 
 
