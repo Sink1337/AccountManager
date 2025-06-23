@@ -37,15 +37,16 @@ public class GuiTokenLogin extends GuiScreen {
     );
 
     private static final Pattern CORE_INFO_EXTRACTION_PATTERN = Pattern.compile(
-            "(?:Accesstoken:([a-zA-Z0-9\\-_\\.]+))|" +
+            "(?:(?:.*?[:|\\s])?Accesstoken:([a-zA-Z0-9\\-_\\.]+))|" +
                     "([a-zA-Z0-9\\-_\\.]+)" +
-                    "(?:\\s*\\|McName:([a-zA-Z0-9_]+))?|" +
+                    "(?:\\s*\\|McName:([a-zA-Z0-9_]+))?" +
                     "(?:\\s*\\|([a-zA-Z0-9_]+))?" +
                     "(?:\\s*\\|([0-9a-fA-F-]{36}))?"
     );
 
     private static final Pattern ACCOUNT_FULL_EXTRACTION_PATTERN = Pattern.compile(
-            "(.*?)(Accesstoken:[a-zA-Z0-9\\-_\\.]+)" +
+            "(?:.*?)?Accesstoken:([a-zA-Z0-9\\-_\\.]+)" +
+                    "(?:\\s*\\|McName:([a-zA-Z0-9_]+))?" +
                     "(?:\\s*\\|([a-zA-Z0-9_]+))?" +
                     "(?:\\s*\\|([0-9a-fA-F-]{36}))?" +
                     "|([a-zA-Z0-9\\-_\\.]+)\\|([a-zA-Z0-9_]+)\\|?([0-9a-fA-F-]{36})?",
@@ -164,11 +165,8 @@ public class GuiTokenLogin extends GuiScreen {
 
         List<String> extractedAccountBlocks = new ArrayList<>();
         while (fullExtractorMatcher.find()) {
-            if (fullExtractorMatcher.group(2) != null || fullExtractorMatcher.group(5) != null) {
-                int startIndex = fullExtractorMatcher.start();
-                int endIndex = fullExtractorMatcher.end();
-                String accountBlock = fullInput.substring(startIndex, endIndex);
-                extractedAccountBlocks.add(accountBlock);
+            if (fullExtractorMatcher.group(1) != null || fullExtractorMatcher.group(5) != null) {
+                extractedAccountBlocks.add(fullExtractorMatcher.group(0));
             }
         }
 
@@ -193,26 +191,28 @@ public class GuiTokenLogin extends GuiScreen {
                 if (coreInfoMatcher.group(1) != null) {
                     token = coreInfoMatcher.group(1);
                 }
-                if (coreInfoMatcher.group(2) != null) {
-                    if (token == null || token.isEmpty()) {
-                        token = coreInfoMatcher.group(2);
-                    }
+                if (token == null && coreInfoMatcher.group(2) != null) {
+                    token = coreInfoMatcher.group(2);
                 }
+
                 if (coreInfoMatcher.group(3) != null) {
                     usernameFromInput = coreInfoMatcher.group(3);
+                } else if (coreInfoMatcher.group(4) != null) {
+                    usernameFromInput = coreInfoMatcher.group(4);
                 }
-                if (coreInfoMatcher.group(4) != null) {
-                    if (usernameFromInput == null || usernameFromInput.isEmpty()) {
-                        usernameFromInput = coreInfoMatcher.group(4);
-                    }
-                }
+
                 if (coreInfoMatcher.group(5) != null) {
                     String potentialUuid = coreInfoMatcher.group(5);
                     if (potentialUuid != null && UUID_PATTERN.matcher(potentialUuid).matches()) {
                         uuidFromInput = potentialUuid;
                     }
                 }
+
+                if (token != null) {
+                    break;
+                }
             }
+
 
             if (token != null && token.length() < 20 && !token.contains(".")) {
                 token = null;
